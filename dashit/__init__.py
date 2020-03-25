@@ -27,7 +27,7 @@ def dashit(functions: List[Callable], appname: str):
         for k,v in flask.request.args.to_dict(flat=True).items():
             try:
                 kwargs[k] = ast.literal_eval(v)
-            except ValueError: # malformed?
+            except:
                 kwargs[k] = v
         return kwargs
 
