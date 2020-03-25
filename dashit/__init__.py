@@ -20,10 +20,22 @@ def dashit(functions: List[Callable], appname: str):
     """
     app = dash.Dash(__name__, url_base_pathname = f"/{appname}/")
 
+    def eval_params(dict):
+        """Attempt to evaluate dictionary values as python code, else return them as is"""
+        import ast
+        kwargs = {}
+        for k,v in flask.request.args.to_dict(flat=True).items():
+            try:
+                kwargs[k] = ast.literal_eval(v)
+            except ValueError: # malformed?
+                kwargs[k] = v
+        return kwargs
+
     def inject_flask_params_as_kwargs(func, **kwargs):
         """Flask converts the url variables into kwargs. We pass those back to our function as args. We also want to inject as kwargs the optional URL parameters"""
         args = kwargs
-        kwargs = flask.request.args.to_dict(flat=False)
+        # kwargs = flask.request.args.to_dict(flat=False) &var=1&var=2 -> var:[1,2]
+        kwargs = eval_params(flask.request.args.to_dict(flat=True)) #&var1=["this"]&another=true -> {"var":["this"],"another":"true"} 
         # TODO: ast.literal_eval on args to catch bools, dicts, etc.s
         print(args, kwargs)
         return func(**args, **kwargs )
