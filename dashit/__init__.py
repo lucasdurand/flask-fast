@@ -30,7 +30,7 @@ def dashit(functions: List[Callable], appname: str):
 
     def handle_wacky_types(thing):
         if isinstance(thing, pd.DataFrame):
-            thing = thing._repr_html_()
+            thing = thing.to_dict(orient="records")
         return thing
     
     def all_the_small_things(func, **kwargs):
