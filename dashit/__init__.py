@@ -10,6 +10,47 @@ import dash
 import dash_html_components as html
 import dash_core_components as dcc
 
+def whats_the_url(function: Callable, app, *args, **kwargs):
+    """Generate the url to GET the function once you `dashit`"""
+    url = ""
+    rule = generate_rule(function, app)
+    for i,arg in inspect.getfullargspec(function).args:
+        rule = rule.replace(f"<{arg}>", args[i])
+    return url
+
+def generate_rule(f, app):
+    """
+    Generate Flask rule to map URL positional and query params to function inputs
+    """
+
+    APP_BASE = app.config["url_base_pathname"]
+
+    argspec = inspect.getfullargspec(f)
+    argspec
+
+    BASE = f.__name__
+    args = argspec.args
+    args = "".join([f"/<{arg}>" for arg in argspec.args])
+
+    rule = f"{APP_BASE}{BASE}{args}"        
+    return rule
+
+def whats_the_url(function: Callable, app, *args, **kwargs):
+    """Generate the url to GET the function once you `dashit`"""
+    arguments = inspect.signature(function).bind(*args,**kwargs).arguments
+    args = arguments.pop("args",[])
+    kwargs = arguments.pop("kwargs",{})
+    url = rule = generate_rule(function, app)
+    print(args, kwargs, rule)
+    # postional args
+    for arg, val in arguments.items():
+        url = url.replace(f"<{arg}>", str(val))
+    # query params
+    url += "?"
+    url += "&".join([f"{keyword}={str(val)}" for keyword, val in kwargs.items()])
+    url = url.strip("?")
+    return url
+
 def dashit(functions: List[Callable], appname: str):
     """
     Create a QUICK Dash app exposing your functions as API endpoints!
@@ -49,26 +90,17 @@ def dashit(functions: List[Callable], appname: str):
         response = inject_flask_params_as_kwargs(func, **kwargs)
         response = handle_wacky_types(response)
         return response
+
     
     def add_rule(app, f):
         """
         Register function as Flask route. Positional and named arguments are all required. 
         In order to handle optional arguments, use **kwargs. *args, is right out.
         """
-
-        APP_BASE = app.config["url_base_pathname"]
-
-        argspec = inspect.getfullargspec(f)
-        argspec
-
-        BASE = f.__name__
-        args = argspec.args
-        args = "".join([f"/<{arg}>" for arg in argspec.args])
-
-        rule = f"{APP_BASE}{BASE}{args}"
+        rule = generate_rule(f, app)
         app.server.add_url_rule(rule, endpoint = f.__name__, view_func = partial(all_the_small_things,func=f))
         return rule
-    
+
     new_routes = [{"name": func.__name__, "docstring": inspect.cleandoc(func.__doc__) if func.__doc__ else "", "endpoint": add_rule(app,func)} for func in functions]
 
     def generate_endpoint_html(route):
