@@ -1,11 +1,11 @@
-from typing import List, Callable, Union, Tuple
+from typing import List, Callable, Union, Tuple, Any, Dict
 
 from functools import partial
 import inspect
 import pandas as pd
 
 import flask
-
+import json
 
 import dash
 import dash_html_components as html
@@ -25,14 +25,14 @@ def generate_rule(f: Callable, app: Union[dash.Dash, flask.Flask]) -> str:
     APP_BASE = app.config.get("APPLICATION_ROOT") or app.config.get("url_base_pathname")
     ENDPOINT = f.__name__
 
-    positional, _ = parse_args(f)
+    positional, _, _, _ = parse_args(f)
     url_args = "".join([f"/<{arg}>" for arg in positional])
 
     rule = f"{APP_BASE}{ENDPOINT}{url_args}"
     return rule
 
 
-def parse_args(f: Callable) -> Tuple[List[str], List[str]]:
+def parse_args(f: Callable):
 
     argspec = inspect.getfullargspec(f)
     args = argspec.args
@@ -41,8 +41,8 @@ def parse_args(f: Callable) -> Tuple[List[str], List[str]]:
         args[: -len(defaults) if defaults else None],
         args[-len(defaults) if defaults else None :],
     )
-
-    return positional, named
+    types = argspec.annotations
+    return positional, named, defaults, types
 
 
 def whats_the_url(
@@ -67,7 +67,7 @@ def whats_the_url(
     print(args, kwargs, rule)
     # postional args
     for arg, val in arguments.items():
-        url = url.replace(f"<{arg}>", str(val))
+        url = url.replace(f"<{arg}>", json.dumps(val))
     # query params
     url += "?"
     url += "&".join([f"{keyword}={str(val)}" for keyword, val in kwargs.items()])
@@ -83,7 +83,7 @@ def eval_params() -> Dict[str, Any]:
     kwargs = {}
     for k, v in flask.request.args.to_dict(flat=True).items():
         try:
-            kwargs[k] = ast.literal_eval(v)
+            kwargs[k] = json.loads(v)
         except:
             kwargs[k] = v
     return kwargs
