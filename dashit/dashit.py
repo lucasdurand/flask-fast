@@ -23,13 +23,13 @@ def generate_rule(f: Callable, app: Union[dash.Dash, flask.Flask]):
     """
 
     # Pull base url from either Flask or Dash app config.
-    APP_BASE = app.config.get("url_base_pathname") or app.config.get("APPLICATION_ROOT", "/")
+    APP_BASE = app.url_prefix #app.config.get("url_base_pathname") or app.config.get("APPLICATION_ROOT", "/")
     ENDPOINT = f.__name__
 
     positional, _, _, _ = parse_args(f)
     url_args = "".join([f"/<{arg}>" for arg in positional])
 
-    base = f"{APP_BASE}{ENDPOINT}"
+    base = f"{APP_BASE}/{ENDPOINT}"
     rule = f"{base}{url_args}"
     return rule
 
@@ -66,7 +66,6 @@ def whats_the_url(
     these_arguments = arguments.copy() 
     kwargs = arguments.pop("kwargs", {})
     url = rule = generate_rule(func, app)
-    print(arguments, args, kwargs, rule)
     # postional args
     for arg in arguments:
         if f"/<{arg}>" in url:
@@ -95,9 +94,7 @@ def eval_params(params) -> Dict[str, Any]:
 
 def inject_flask_params_as_kwargs(func, **kwargs):
     """Flask converts the url variables into kwargs. We pass those back to our function as args. We also want to inject as kwargs the optional URL parameters"""
-    print(kwargs)
     positional = eval_params(kwargs.items())
-    print(positional)
     params = (
         eval_params(flask.request.args.to_dict(flat=True).items())
     )  # &var1=["this"]&another=true -> {"var":["this"],"another":"true"}
@@ -124,7 +121,7 @@ def add_rule(app: Union[flask.Flask, dash.Dash], f: Callable):
     In order to handle optional arguments, use **kwargs. *args is right out.
     """
     rule = generate_rule(f, app)
-    server = app if isinstance(app, flask.Flask) else app.server
+    server = app if isinstance(app, flask.Blueprint) or isinstance(app, flask.Flask) else app.server
     view_func = partial(_all_the_small_things, function=f)
     view_func.__doc__ = f.__doc__
     server.add_url_rule(
@@ -145,15 +142,21 @@ def _all_the_small_things(function, **kwargs):
     response = handle_wacky_types(response)
     return response
 
+def make_blueprint(functions: List[Callable], appname:str, version:str):
+    blueprint = flask.Blueprint("api", __name__, url_prefix="/api")
+    spec = swagger.create_apispec(appname=appname, version=version)
+    paths = [swagger.register_swag(app=blueprint, spec=spec, func=func, path=add_rule(app=blueprint, f=func)) for func in functions]
+    blueprint = swagger.register_swagger_endpoints(blueprint, spec)
+    return blueprint
+
 def flaskit(functions: List[Callable], appname:str, version:str="1.0.0") -> flask.Flask:
     app = flask.Flask(__name__)
-    spec = swagger.create_apispec(appname=appname, version=version)
-    paths = [swagger.register_swag(app=app, spec=spec, func=func, path=add_rule(app=app, f=func)) for func in functions]
-    app = swagger.register_swagger_endpoints(app, spec)
-    print(paths)
+    blueprint = make_blueprint(functions, appname=appname, version=version)
+    app.register_blueprint(blueprint)
+    print(app.url_map)
     return app
 
-def dashit(functions: List[Callable], appname: str):
+def dashit(functions: List[Callable], appname: str, version:str="1.0.0") -> dash.Dash:
     """
     Create a QUICK Dash app exposing your functions as API endpoints!
     
@@ -163,36 +166,9 @@ def dashit(functions: List[Callable], appname: str):
     """
 
     app = dash.Dash(__name__, url_base_pathname=f"/{appname}/")
-
-    new_routes = [
-        {
-            "name": func.__name__,
-            "docstring": inspect.cleandoc(func.__doc__) if func.__doc__ else "",
-            "endpoint": add_rule(app, func),
-        }
-        for func in functions
-    ]
-
-    # def generate_endpoint_html(route):
-    #     return (
-    #         dcc.Markdown(
-    #             [f"""**{route["name"]}:** [{route["endpoint"]}]({route["endpoint"]})"""]
-    #         ),
-    #         html.Blockquote([dcc.Markdown([route["docstring"]])]),
-    #     )
-
-    # flatten = lambda l: [item for sublist in l for item in sublist]
-
-    # app.layout = html.Div(
-    #     [
-    #         html.H1([appname]),
-    #         html.H3(
-    #             ["DASHIT: Functions Are APIs Now."]
-    #         ),  # some explanation on how the app works. Use function docstring.
-    #         html.Div(flatten([generate_endpoint_html(route) for route in new_routes])),
-    #     ]
-    # )
-    print(new_routes)
+    blueprint = make_blueprint(functions, appname=appname, version=version)
+    app.server.register_blueprint(blueprint, url_prefix=f"/{appname}/api")
+    print(app.server.url_map)
 
     app.layout = html.Div()
 

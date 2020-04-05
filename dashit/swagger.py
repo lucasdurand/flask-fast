@@ -11,7 +11,10 @@ from . import dashit
 
 
 def create_apispec(appname: str, version: str = "1.0.0") -> APISpec:
-    # Create an APISpec
+    """
+    Create an APISpec to build up a swagger spec.
+    This isn't used very heavily. Consider adapting this to a proper apispec plugin, or dumping APISpec altogether.
+    """
     spec = APISpec(title=appname, version=version, openapi_version="3.0.3")
     return spec
 
@@ -51,15 +54,15 @@ def process_type_name(param_type, default=None):
             name = (
                 param_type.__origin__
                 if param_type and param_type.__origin__ in types
-                else "it's complicated"
+                else None
             )
 
-    js_name = types.get(name, "")
+    js_name = types.get(name, "object")
 
     return js_name
 
 
-def swagger_params(function: Callable, **yet_other_stuff):
+def swagger_params(function: Callable):
     positional, named, defaults, types = dashit.parse_args(function)
     print(types, defaults, positional, named)
     path_args = [
@@ -106,27 +109,9 @@ def register_swag(app, spec, func, path):
     return path
 
 
-def register_function_spec(app: Union[flask.Flask, dash.Dash], spec: APISpec):
-    # Register the path and the entities within it
-    APP_BASE = app.config.get("url_base_pathname") or app.config.get(
-        "APPLICATION_ROOT", "/"
-    )
-    server = app if isinstance(app, flask.Flask) else app.server
-    view_functions = server.view_functions
-    # print(view_functions)
-    for name, function in view_functions.items():
-        if name[0] != "_" and f"{APP_BASE}_" not in name:
-            with server.test_request_context():
-                spec.path(view=function)
-    return server
+def register_swagger_endpoints(app: flask.Blueprint, spec: APISpec):
 
-
-def register_swagger_endpoints(app: Union[flask.Flask, dash.Dash], spec: APISpec):
-    APP_BASE = app.config.get("url_base_pathname") or app.config.get(
-        "APPLICATION_ROOT", "/"
-    )
-    server = app if isinstance(app, flask.Flask) else app.server
-    swagger_endpoint = f"""{APP_BASE}swagger"""
+    swagger_endpoint = "swagger"
 
     swagger_ui = f"""<!DOCTYPE html>
     <html>
@@ -157,13 +142,13 @@ def register_swagger_endpoints(app: Union[flask.Flask, dash.Dash], spec: APISpec
       </body>
     </html>"""
 
-    @server.route(f"{APP_BASE}swagger_ui")
+    @app.route(f"/")
     def serve_swagger_ui():
         return swagger_ui
 
-    @server.route(swagger_endpoint)
+    @app.route(swagger_endpoint)
     def serve_swagger_spec():
         return json.dumps(spec.to_dict())
 
     print("Swagger at: " + swagger_endpoint)
-    return server
+    return app
