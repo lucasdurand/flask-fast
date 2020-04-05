@@ -63,16 +63,19 @@ def whats_the_url(
         else:
             raise
 
-    args = arguments.pop("args", [])
+    these_arguments = arguments.copy() 
     kwargs = arguments.pop("kwargs", {})
     url = rule = generate_rule(func, app)
-    print(args, kwargs, rule)
+    print(arguments, args, kwargs, rule)
     # postional args
-    for arg, val in arguments.items():
-        url = url.replace(f"<{arg}>", json.dumps(val))
+    for arg in arguments:
+        if f"/<{arg}>" in url:
+            url = url.replace(f"<{arg}>", json.dumps(these_arguments.pop(arg)))
+
+    these_arguments.update(kwargs)
     # query params
     url += "?"
-    url += "&".join([f"{keyword}={str(val)}" for keyword, val in kwargs.items()])
+    url += "&".join([f"{keyword}={json.dumps(val)}" for keyword, val in these_arguments.items()])
     url = url.strip("?")
 
     return url
