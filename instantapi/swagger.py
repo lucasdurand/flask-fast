@@ -7,7 +7,7 @@ from flask import Flask
 from typing import List, Callable, Dict, Union
 import inspect
 
-from . import dashit
+from . import api
 
 
 def create_apispec(appname: str, version: str = "1.0.0") -> APISpec:
@@ -63,7 +63,7 @@ def process_type_name(param_type, default=None):
 
 
 def swagger_params(function: Callable):
-    positional, named, defaults, types = dashit.parse_args(function)
+    positional, named, defaults, types = api.parse_args(function)
     print(types, defaults, positional, named)
     path_args = [
         swagger_format(
@@ -92,7 +92,7 @@ def register_swag(app, spec, func, path):
     docstring = func.__doc__ if func.__doc__ else ""
 
     spec.path(
-        path=path.replace("<", "{").replace(">", "}"),
+        path=app.url_prefix+"/"+path.replace("<", "{").replace(">", "}"),
         operations={
             "get": {
                 "responses": {
@@ -100,6 +100,7 @@ def register_swag(app, spec, func, path):
                         "description": "Success!"
                     },
                 },
+                "tags":[app.url_prefix.split("/")[-1]],
                 "summary": docstring.split("\n")[0],
                 "description": docstring,
             }
@@ -142,11 +143,11 @@ def register_swagger_endpoints(app: flask.Blueprint, spec: APISpec):
       </body>
     </html>"""
 
-    @app.route(f"/")
+    @app.route("/")
     def serve_swagger_ui():
         return swagger_ui
 
-    @app.route(swagger_endpoint)
+    @app.route(f"/{swagger_endpoint}/")
     def serve_swagger_spec():
         return json.dumps(spec.to_dict())
 

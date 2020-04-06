@@ -1,4 +1,4 @@
-from typing import List, Callable, Union, Tuple, Any, Dict
+from typing import List, Callable, Union, Tuple, Any, Dict, Optional
 
 from functools import partial
 import inspect
@@ -13,24 +13,21 @@ import dash_core_components as dcc
 
 from . import swagger
 
-class DashitError(Exception):
+class InstantAPIError(Exception):
     pass
 
 
-def generate_rule(f: Callable, app: Union[dash.Dash, flask.Flask]):
+def generate_rule(f: Callable, app: flask.Blueprint):
     """
     Generate Flask rule to map URL positional and query params to function inputs
     """
 
-    # Pull base url from either Flask or Dash app config.
-    APP_BASE = app.url_prefix #app.config.get("url_base_pathname") or app.config.get("APPLICATION_ROOT", "/")
     ENDPOINT = f.__name__
 
     positional, _, _, _ = parse_args(f)
-    url_args = "".join([f"/<{arg}>" for arg in positional])
+    url_args = "/".join([f"<{arg}>" for arg in positional])
 
-    base = f"{APP_BASE}/{ENDPOINT}"
-    rule = f"{base}{url_args}"
+    rule = f"{ENDPOINT}/{url_args}"
     return rule
 
 
@@ -48,7 +45,7 @@ def parse_args(f: Callable):
 
 
 def whats_the_url(
-    func: Callable, app: Union[dash.Dash, flask.Flask], *args, **kwargs
+    func: Callable, app: flask.Blueprint, *args, **kwargs
 ) -> str:
     """Generate the url to GET the function once you `dashit`"""
 
@@ -59,7 +56,7 @@ def whats_the_url(
     except TypeError as e:
         if any([error in str(e) for error in call_errors]):
             msg = f"{e}. {func.__name__} is called like {func.__name__}{signature}"
-            raise DashitError(msg) from e
+            raise InstantAPIError(msg) from e
         else:
             raise
 
@@ -76,7 +73,7 @@ def whats_the_url(
     url += "?"
     url += "&".join([f"{keyword}={json.dumps(val)}" for keyword, val in these_arguments.items()])
     url = url.strip("?")
-
+    url = f"{app.url_prefix}/{url}"
     return url
 
 
@@ -115,23 +112,24 @@ def inject_flask_params_as_kwargs(func, **kwargs):
     return value
 
 
-def add_rule(app: Union[flask.Flask, dash.Dash], f: Callable):
+def add_rule(blueprint: flask.Blueprint, f: Callable):
     """
     Register function as Flask route. Positional and named arguments are all required. 
     In order to handle optional arguments, use **kwargs. *args is right out.
     """
-    rule = generate_rule(f, app)
-    server = app if isinstance(app, flask.Blueprint) or isinstance(app, flask.Flask) else app.server
+    rule = generate_rule(f, blueprint)
     view_func = partial(_all_the_small_things, function=f)
     view_func.__doc__ = f.__doc__
-    server.add_url_rule(
-        rule, endpoint=rule, view_func=view_func
+    blueprint.add_url_rule(
+        rule, endpoint=rule.replace(blueprint.url_prefix,"",1), view_func=view_func
     )
-    f.url = partial(whats_the_url, f, server)
+    f.url = partial(whats_the_url, f, blueprint)
+    f.rule = rule
     return rule
 
 
 def handle_wacky_types(thing):
+    """Not really a good idea to keep this"""
     if isinstance(thing, pd.DataFrame):
         thing = thing.to_json(orient="table")
     return thing
@@ -142,34 +140,44 @@ def _all_the_small_things(function, **kwargs):
     response = handle_wacky_types(response)
     return response
 
-def make_blueprint(functions: List[Callable], appname:str, version:str):
-    blueprint = flask.Blueprint("api", __name__, url_prefix="/api")
-    spec = swagger.create_apispec(appname=appname, version=version)
-    paths = [swagger.register_swag(app=blueprint, spec=spec, func=func, path=add_rule(app=blueprint, f=func)) for func in functions]
-    blueprint = swagger.register_swagger_endpoints(blueprint, spec)
-    return blueprint
+def make_blueprint(functions: List[Callable], appname:str, spec:Optional[swagger.APISpec]=None, version:str=""):
+    blueprint = flask.Blueprint(f"instantapi-{appname}", __name__, url_prefix=f"/api/{appname}")
+    spec = spec or swagger.create_apispec(appname=appname, version=version)
+    paths = [swagger.register_swag(app=blueprint, spec=spec, func=func, path=add_rule(blueprint=blueprint, f=func)) for func in functions]
+    return blueprint, spec
 
-def flaskit(functions: List[Callable], appname:str, version:str="1.0.0") -> flask.Flask:
-    app = flask.Flask(__name__)
-    blueprint = make_blueprint(functions, appname=appname, version=version)
+def flaskit(functions: List[Callable], appname:str, app:Optional[flask.Flask]=None, spec:Optional[swagger.APISpec]=None, version:str="1.0.0") -> Tuple[flask.Flask, swagger.APISpec]:
+    app = app or flask.Flask(__name__)
+    blueprint, spec = make_blueprint(functions, appname=appname, spec=spec, version=version)
     app.register_blueprint(blueprint)
+    
+    try:
+        swagger_blueprint, _ = make_blueprint([], "")
+        swagger.register_swagger_endpoints(app=swagger_blueprint, spec=spec)
+        app.register_blueprint(swagger_blueprint)
+    except AssertionError as e:
+        if not "A name collision" in str(e):
+            raise
     print(app.url_map)
-    return app
+    return app, spec
 
-def dashit(functions: List[Callable], appname: str, version:str="1.0.0") -> dash.Dash:
+def dashit(functions: List[Callable], appname: str, app:Optional[dash.Dash]=None, server:Optional[flask.Flask]=None, version:str="1.0.0") -> Tuple[dash.Dash, swagger.APISpec]:
     """
+    Why does this exist? It's just the flask app with an empty home page ... 
+    If we wanted to append to an existing Dash app, we can just use flaskit on app.server ...
+    
     Create a QUICK Dash app exposing your functions as API endpoints!
-    
-    endpoint url:  
-    
+        
     All positional arguments will be required in the url. Named and keyword args are passed as query params.
     """
+    
+    app = app or dash.Dash(__name__, server, url_base_pathname=f"/{appname}/")
 
-    app = dash.Dash(__name__, url_base_pathname=f"/{appname}/")
-    blueprint = make_blueprint(functions, appname=appname, version=version)
-    app.server.register_blueprint(blueprint, url_prefix=f"/{appname}/api")
+    server = app.server or server
+
+    server, spec = flaskit(functions=functions, appname=appname, app=server, version=version)
+    app.server = server
+    app.layout = app.layout or html.Div(html.A("/api",href="/api"))
+
     print(app.server.url_map)
-
-    app.layout = html.Div()
-
-    return app
+    return app, spec
