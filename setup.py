@@ -8,7 +8,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="flask-fast",
+    name="flask_fast",
     version="0.0.1-dev0",
     description="Flask-fast. It's fast.",
     long_description=long_description,
@@ -17,7 +17,7 @@ setup(
     author="Lucas Durand",
     author_email="lucas@lucasdurand.xyz",
     tests_require=["pytest"],
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests*"]),
     python_requires=">=3.7",
     install_requires=[
         "pandas",
