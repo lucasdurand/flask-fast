@@ -8,12 +8,12 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="dashit",
+    name="flask-fast",
     version="0.0.1-dev0",
-    description="Dashit. It's dashit.",
+    description="Flask-fast. It's fast.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/lucasdurand/dashit",
+    url="https://github.com/lucasdurand/flask-fast",
     author="Lucas Durand",
     author_email="lucas@lucasdurand.xyz",
     tests_require=["pytest"],
