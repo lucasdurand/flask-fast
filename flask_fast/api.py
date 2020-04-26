@@ -13,7 +13,7 @@ import dash_core_components as dcc
 
 from . import swagger
 
-class InstantAPIError(Exception):
+class FastFlaskError(Exception):
     pass
 
 
@@ -56,7 +56,7 @@ def whats_the_url(
     except TypeError as e:
         if any([error in str(e) for error in call_errors]):
             msg = f"{e}. {func.__name__} is called like {func.__name__}{signature}"
-            raise InstantAPIError(msg) from e
+            raise FastFlaskError(msg) from e
         else:
             raise
 
