@@ -23,6 +23,8 @@ setup(
         "pandas",
         "dash",
         "flask",
+        "apispec",
+        "apispec-webframeworks",
     ],  # dash could be optional here if we re-write the function to action on a flask app
     extras_require={"dev": ["black", "pre-commit"], "test": ["coverage"]},
 )
