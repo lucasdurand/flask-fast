@@ -8,8 +8,8 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name="flask_fast",
-    version="0.0.1-dev0",
+    name="flaskfast",
+    version="0.0.1",
     description="Flask-fast. It's fast.",
     long_description=long_description,
     long_description_content_type="text/markdown",
