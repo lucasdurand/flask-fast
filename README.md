@@ -14,4 +14,7 @@ Flaskit. Dashit. It's instantapi.
 
 ## Releasing
 
-Bump `version` in `pyproject.toml` (`uv version --bump patch`), then publish a GitHub release tagged with that version (e.g. `v0.1.5`). [The Publish workflow](.github/workflows/publish.yml) checks that the tag matches, builds the package and uploads it to PyPI. It needs a `PYPI_API_TOKEN` Actions secret.
+[The Release workflow](.github/workflows/release.yml) publishes to PyPI based on the version in `pyproject.toml`. It needs a `PYPI_API_TOKEN` Actions secret.
+
+- **Merge to `main`:** if that version isn't tagged yet, it's published to PyPI and tagged (`v<version>`) with a GitHub release. To release, bump the version (`uv version --bump patch`) and merge to `main`.
+- **Merge to `develop`:** a dev pre-release `<version>.dev<N>` is published (N is the workflow run number). If the version is already released, dev builds count towards the next patch version. Install one with `pip install --pre flaskfast`.
