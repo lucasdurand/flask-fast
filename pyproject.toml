@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flaskfast"
+version = "0.1.0"
+description = "Flask-fast. It's fast."
+readme = "README.md"
+authors = [{ name = "Lucas Durand", email = "lucas@lucasdurand.xyz" }]
+requires-python = ">=3.11"
+# dash could be optional here if we re-write the function to action on a flask app
+dependencies = [
+    "apispec",
+    "apispec-webframeworks",
+    "dash>=2.0",
+    "flask",
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = ["black", "pre-commit"]
+test = ["coverage"]
+
+[project.urls]
+Homepage = "https://github.com/lucasdurand/flask-fast"
+
+[dependency-groups]
+dev = [
+    "black>=26.10",
+    "ipython>=9.17",
+    "jupyter>=1.1",
+    "mypy>=2.4",
+    "pytest>=9.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["flaskfast*"]
